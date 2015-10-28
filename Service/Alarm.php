@@ -21,12 +21,15 @@ class Alarm {
      * @todo 通知方式自己实现
      * @return mixed
      */
-    public static function noticeProgrammer($uid) {
-        //$phone = self::getProgrammerInfo($uid);
+    public static function noticeProgrammer($params) {
+        $url     = 'http://sc.ftqq.com/SCU60T29db0e2a2c17d9e3d4ec3e77d5a41a2055eee817beab5.send';
 
-
-        return true;
-        //return self::httpRequest($url, $data);
+        $content = '';
+        foreach($params as $val) {
+            $content .= "* {$val} <br />";
+        }
+        $data  = array('text' => '定时程序执行失败', 'desp' => $content);
+        return self::httpRequest($url, $data);
     }
 
 
@@ -37,9 +40,10 @@ class Alarm {
      * @return mixed
      */
     public static function noticeOperational() {
-        return true;
+        $url = 'http://sc.ftqq.com/SCU60T29db0e2a2c17d9e3d4ec3e77d5a41a2055eee817beab5.send';
+        $data = array('text' =>'定时任务系统关闭');
 
-        //return self::httpRequest($url, $data);
+        return self::httpRequest($url, $data);
 
     }
 

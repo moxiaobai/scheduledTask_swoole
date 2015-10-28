@@ -21,7 +21,7 @@ class TimerServer {
 
     public function __construct($cmd) {
         if($cmd == 'start') {
-            $this->_server = new swoole_server("0.0.0.0", 9503);
+            $this->_server = new swoole_server("127.0.0.1", 9503);
             $this->_server->set(array(
                 'worker_num'     => 1,   //必须设置为1
                 'max_request'    => 10000,
@@ -44,6 +44,8 @@ class TimerServer {
             $this->_server->on('Shutdown', array($this, 'onShutdown'));
 
             $this->_server->start();
+
+            echo '服务器启动: ' . date('Y-m-d H:i:s') . PHP_EOL;
         } else {
             $this->manage($cmd);
         }
@@ -51,7 +53,7 @@ class TimerServer {
 
     //主进程的主线程回调此函数
     public function onStart($server) {
-        echo '服务器启动: ' . date('Y-m-d H:i:s') . PHP_EOL;
+        //echo '服务器启动: ' . date('Y-m-d H:i:s') . PHP_EOL;
 
         //设置主进程名称
         swoole_set_process_name('scheduledTask');
@@ -66,7 +68,7 @@ class TimerServer {
 
         //获取所有符合条件的计划任务，添加定时器
         if($taskList) {
-            foreach($taskList as $key => $val) {
+            foreach($taskList as $val) {
 
                 //任务执行间隔时间
                 $timeInterval = $val['s_interval'] * 1000;
@@ -132,7 +134,6 @@ class TimerServer {
 
             //请求类型
             $type = $data['type'];
-
             switch($type) {
                 //添加定时器
                 case 'add':
@@ -147,6 +148,8 @@ class TimerServer {
 
                     $data = array('code'=>200, 'msg'=>'添加定时器成功', 'data'=>null);
                     $server->send($fd, json_encode($data));
+					
+					echo "[添加定时器ID: {$timerId}] ---- [任务ID: {$list['s_id']}] ----[启动时间:]" .  date('Y-m-d H:i:s') . PHP_EOL;
 
                     break;
                 //修改定时器
@@ -159,8 +162,6 @@ class TimerServer {
 
                 //删除定时器
                 case 'del':
-                    echo '删除定时器: ' . date('Y-m-d H:i:s') . PHP_EOL;
-
                     //任务ID
                     $taskId  = $list['s_id'];
 
@@ -176,11 +177,13 @@ class TimerServer {
                     $data = array('code'=>200, 'msg'=>'删除定时器成功', 'data'=>null);
                     $server->send($fd,  json_encode($data));
 
+                    echo "[删除定时器ID: {$timerId}] ---- [任务ID: {$taskId}] ----[删除时间:]" .  date('Y-m-d H:i:s') . PHP_EOL;
+
                     break;
 
 
                 default:
-                    $data = array('code'=>500, 'msg'=>'非法请求', 'data'=>null);
+                    $data = array('code'=>500, 'msg'=>'非法请求1', 'data'=>null);
                     $server->send($fd, json_encode($data));
 
                     break;
@@ -210,35 +213,41 @@ class TimerServer {
         $taskId       = $params['s_id'];        //任务ID
         $title        = $params['s_title'];     //任务名称
         $url          = $params['s_url'];       //任务Url
-        $uid          = $params['u_id'];        //定时任务负责人
+        $starTime     = $params['s_startTime'];  //任务开始执行时间
+        $endTime      = $params['s_endTime'];  //任务结束时间
+        //$uid          = $params['u_id'];        //定时任务负责人
 
-        $responseResult = Curl::get($url);
-        $result         = $responseResult['result'];
-        $httpCode       = $responseResult['code'];
-        $msg            = $responseResult['msg'];
+        //判断程序是否在执行时间范围内
+        $now = date('Y-m-d H:i:s');
+        if($now >= $starTime && $now <= $endTime) {
+            $responseResult = Curl::get($url);
+            $result         = $responseResult['result'];
+            $httpCode       = $responseResult['code'];
+            $msg            = $responseResult['msg'];
 
-        //任务返回数据
-        $data = json_decode($result, true);
+            //任务返回数据
+            $data = json_decode($result, true);
 
-        $status = '成功';
-        if(!is_null($msg) || $httpCode != 200 || $data['code'] != 1) {
-            $status = '失败';
+            $status = '成功';
+            if(!is_null($msg) || $httpCode != 200 || $data['code'] != 1) {
+                $status = '失败';
 
-            //todo 报警处理
-            Alarm::noticeProgrammer($uid);
+                //todo 报警处理
+                Alarm::noticeProgrammer($params);
+            }
+
+            //todo 任务运行日志
+            $logData = array(
+                'task_id'       => $taskId,
+                'task_title'    => $title,
+                'task_url'      => $url,
+                'task_code'     => $httpCode,
+                'task_status'   => $status,
+                'task_result'   => $result,
+                'task_runTime'  => time()
+            );
+            Logger::addTimerLog($logData);
         }
-
-        //todo 任务运行日志
-        $logData = array(
-            'task_id'       => $taskId,
-            'task_title'    => $title,
-            'task_url'      => $url,
-            'task_code'     => $httpCode,
-            'task_status'   => $status,
-            'task_result'   => $result,
-            'task_runTime'  => time()
-        );
-        Logger::addTimerLog($logData);
     }
 
     /**
@@ -248,6 +257,10 @@ class TimerServer {
      * @throws Exception
      */
     private function manage($cmd) {
+        if(!in_array($cmd, array('start', 'stop', 'reload'))) {
+            exit("Start parameter does not exist\n");
+        }
+
         $client = new swoole_client(SWOOLE_SOCK_UDP);
         $ret = $client->connect('127.0.0.1', 9504, 0.5);
         if(!$ret) {

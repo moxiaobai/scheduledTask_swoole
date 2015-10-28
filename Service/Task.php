@@ -18,12 +18,11 @@ class Task {
      */
     public static function getTaskList() {
         $db  = Mysql::instance('cron');
-        $now = time();
+        $now = date('Y-m-d H:i:s');
 
         $sql = $db->select('*')->from('t_schedule')
                         ->where("s_status = 1")
-                        ->where("{$now} >= s_startTime")
-                        ->where("{$now} <= s_endTime")
+                        ->where("'{$now}' <= s_endTime")
                         ->order('s_id', 'ASC');
         $row = $db->fetchAll($sql);
 
@@ -41,7 +40,7 @@ class Task {
         $runTime   = date('Y-m-d H:i:s');
 
         $sql = "UPDATE t_schedule
-                SET s_runTime = '$runTime', s_timerId = $timerId
+                SET s_runTime = '$runTime', s_timerId = $timerId, s_running_state = 2
                 WHERE s_id = $taskId";
         $result = $db->query($sql);
 
@@ -56,7 +55,7 @@ class Task {
         $stopTime   = date('Y-m-d H:i:s');
 
         $sql = "UPDATE t_schedule
-                SET s_stopTime = '$stopTime', s_timerId = 0";
+                SET s_stopTime = '$stopTime', s_timerId = -1, s_running_state =1";
         $result = $db->query($sql);
 
         return $result;
@@ -71,9 +70,10 @@ class Task {
      */
     public static function delTask($taskId) {
         $db        = Mysql::instance('cron');
+        $stopTime  = date('Y-m-d H:i:s');
 
         $sql = "UPDATE t_schedule
-                SET s_status = 0, s_timerId = 0
+                SET s_stopTime='$stopTime', s_timerId = -1, s_running_state = 1
                 WHERE s_id = $taskId";
         $result = $db->query($sql);
 

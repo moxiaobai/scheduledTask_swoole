@@ -11,7 +11,7 @@ class Mongo  {
 
     public static $cron = array(
         'product' => array(
-            'host'      => '192.168.1.3',
+            'host'      => '127.0.0.1',
             'port'      => '27017',
             'database'  => 'cron'
         ),

@@ -12,7 +12,7 @@ class Memcache {
     public static $cron = array(
         'product' => array(
             array(
-                'host'    => '192.168.1.3',
+                'host'    => '127.0.0.1',
                 'port'    => 11211
             )
         ),

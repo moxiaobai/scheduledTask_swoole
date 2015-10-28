@@ -9,27 +9,12 @@ namespace Config;
  */
 class Database  {
 
-    public static $erp = array(
-        'product' => array(
-            'host'     => '192.168.1.3',
-            'user'     => 'root',
-            'password' => 'rxg^@@!@$1987',
-            'database' => 'erp'
-        ),
-        'develop' => array(
-            'host'     => '192.168.1.3',
-            'user'     => 'root',
-            'password' => 'rxg^@@!@$1987',
-            'database' => 'erp'
-        )
-    );
-
     public static $cron = array(
         'product' => array(
-            'host'     => '192.168.1.202',
+            'host'     => 'localhost',
             'user'     => 'root',
-            'password' => 'rxg^@@!@$1987',
-            'database' => 'cron'
+            'password' => 'mg^@@!@$',
+            'database' => 'system'
         ),
         'develop' => array(
             'host'     => '192.168.1.202',
