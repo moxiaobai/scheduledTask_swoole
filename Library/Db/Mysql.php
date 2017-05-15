@@ -36,7 +36,7 @@ class Mysql {
         }
 
         if ( ! isset(self::$_instances[$name]) ) {
-        	$instance = new Mysql ( self::$_configs['host'], self::$_configs['user'], self::$_configs['password'], self::$_configs['database'] );
+        	$instance = new Mysql ( self::$_configs['host'], self::$_configs['user'], self::$_configs['password'], self::$_configs['database'],self::$_configs['port'] );
         	self::$_instances[$name] = $instance;
 
         	return self::$_instances[$name];
@@ -48,19 +48,15 @@ class Mysql {
     /**
 	 * 构造函数 选择数据库
 	 */
-    public function __construct($hostname, $username, $password, $database) {
-    	if ( ! $this->_connection = mysql_connect($hostname, $username, $password)) {
-            throw new \Exception('Error: Could not make a database _connection using ' . $username . '@' . $hostname);
+    public function __construct($hostname, $username, $password, $database, $port) {
+        if ( ! $this->_connection = mysqli_connect($hostname, $username, $password, $database,$port)) {
+            die('Error: Could not make a database _connection using ' . $username . '@' . $hostname);
         }
 
-        if ( ! mysql_select_db($database, $this->_connection)) {
-            throw new \Exception('Error: Could not connect to database ' . $database);
-        }
-
-        mysql_query("SET NAMES 'utf8'", $this->_connection);
-        mysql_query("SET CHARACTER SET utf8", $this->_connection);
-        mysql_query("SET CHARACTER_SET_CONNECTION=utf8", $this->_connection);
-        mysql_query("SET SQL_MODE = ''", $this->_connection);
+        mysqli_query($this->_connection, "SET NAMES 'utf8mb4'");
+        mysqli_query($this->_connection, "SET CHARACTER SET utf8mb4");
+        mysqli_query($this->_connection, "SET CHARACTER_SET_CONNECTION=utf8mb4");
+        mysqli_query($this->_connection, "SET SQL_MODE = ''");
     }
 
 
@@ -71,7 +67,7 @@ class Mysql {
      * @return int 影响行
      */
 	public function countAffected() {
-        return mysql_affected_rows($this->_connection);
+        return mysqli_affected_rows($this->_connection);
     }
 
 
@@ -82,7 +78,7 @@ class Mysql {
      * @return int 最新id值
      */
     public function getInsertId() {
-        return mysql_insert_id($this->_connection);
+        return mysqli_insert_id($this->_connection);
     }
 
 
@@ -94,36 +90,32 @@ class Mysql {
      * @return mixed 如果是Resource返回对象，否则返回影响行/最新插入id
      */
 	public function query($sql) {
-		if ( is_object($sql) ) {
+        if ( is_object($sql) ) {
             $sql = $sql->_toSQL();
         }
 
-    	$resource = mysql_query($sql, $this->_connection);
-        if ($resource) {
-            if (is_resource($resource)) {
+        $resource = mysqli_query($this->_connection, $sql);
+        if(! $resource) {
+            die('Error: ' . mysqli_error($this->_connection) . '<br />Error No: ' . mysqli_errno($this->_connection) . '<br />' . $sql);
+        }
 
-                $i = 0;
-                $data = array();
-                while ($result = mysql_fetch_assoc($resource)) {
-                    $data[$i] = $result;
-					$i++;
-				}
-
-		        mysql_free_result($resource);
-
-				$query = new \stdClass();
-        		$query->one  = isset($data[0]) ? $data[0] : FALSE;
-		        $query->rows = empty($data) ? FALSE : $data;
-			    $query->num  = $i;
-
-	    		unset($data);
-    		    return $query;
-
-            } else {
-                return ( $this->_type == 'INSERT' ) ? $this->getInsertId() : $this->countAffected();
+        if($this->_type == 'SELECT') {
+            $i = 0; $data = array();
+            while ($result = mysqli_fetch_assoc($resource)) {
+                $data[$i] = $result;
+                $i++;
             }
+            mysqli_free_result($resource);
+
+            $query = new \stdClass();
+            $query->one  = isset($data[0]) ? $data[0] : FALSE;
+            $query->rows = empty($data) ? FALSE : $data;
+            $query->num  = $i;
+
+            unset($data);
+            return $query;
         } else {
-            throw new \Exception( mysql_error($this->_connection));
+            return ( $this->_type == 'INSERT' ) ? $this->getInsertId() : $this->countAffected();
         }
     }
 
@@ -718,25 +710,25 @@ class Mysql {
 	 * @param $data
 	 * @param $like
 	 */
-	function escape($data, $like = FALSE){
-		if ( is_array($data) ){
-			foreach ($data AS $key => $row){
-				$data[$key] = $this->escape($row, $like);
-	   		}
-	   		return $data;
-	   	}
+    function escape($data, $like = FALSE){
+        if ( is_array($data) ){
+            foreach ($data AS $key => $row){
+                $data[$key] = $this->escape($row, $like);
+            }
+            return $data;
+        }
 
-		if ( function_exists('mysql_real_escape_string') ) {
-			$data = mysql_real_escape_string($data);
-		} else {
-			$data = addslashes($data);
-		}
+        if ( function_exists('mysqli_real_escape_string') ) {
+            $data = mysqli_real_escape_string($this->_connection, $data);
+        } else {
+            $data = addslashes($data);
+        }
 
-		if ( $like === TRUE ) {
-			$data = str_replace(array('%', '_'), array('\\%', '\\_'), $data);
-		}
-		return $data;
-	}
+        if ( $like === TRUE ) {
+            $data = str_replace(array('%', '_'), array('\\%', '\\_'), $data);
+        }
+        return $data;
+    }
 
 }
 

@@ -14,7 +14,6 @@ use Service\Logger;
 use Service\Alarm;
 use Service\Curl;
 
-
 class TimerServer {
 
     private $_server;
@@ -30,12 +29,12 @@ class TimerServer {
                 'open_eof_split' => true,        //启用EOF自动分包
                 'dispatch_mode'  => 2,
                 'debug_mode'     => 1 ,
-                'daemonize'      => 1,
+                'daemonize'      => true,
                 'log_file'       => __DIR__ . '/Log/swoole.log'
             ));
 
             //增加监听的端口
-            $this->_server->addlistener("127.0.0.1", 9504, SWOOLE_SOCK_UDP);
+            $this->_server->addlistener("127.0.0.1", 9504, SWOOLE_SOCK_TCP);
 
             //设置事件回调
             $this->_server->on('Start', array($this, 'onStart'));
@@ -94,7 +93,6 @@ class TimerServer {
      * @param $data         收到的数据内容
      */
     public function onReceive(swoole_server $server, $fd, $from_id, $data) {
-
         if(empty($data)) {
             // 发送数据给客户端，请求包错误
             $data = array('code'=>500, 'msg'=>'非法请求', 'data'=>null);
@@ -104,10 +102,12 @@ class TimerServer {
         //局域网管理
         $udpClient = $server->connection_info($fd, $from_id);
         if($udpClient['server_port'] == '9504') {
-            echo $data . PHP_EOL;
+            //echo $data . PHP_EOL;
 
+            $data = trim($data);
             switch($data) {
                 case 'stop':
+                    echo 1 . PHP_EOL;
                     echo '服务器关闭: ' . date('Y-m-d H:i:s') . PHP_EOL;
 
                     $server->shutdown();
@@ -115,6 +115,7 @@ class TimerServer {
 
                     break;
                 case 'reload':
+                    echo 2 . PHP_EOL;
                     echo 'Worker进程重启: ' . date('Y-m-d H:i:s') . PHP_EOL;
 
                     $server->reload();
@@ -225,26 +226,37 @@ class TimerServer {
             $httpCode       = $responseResult['code'];
             $msg            = $responseResult['msg'];
 
-            //任务返回数据
-            $data = json_decode($result, true);
+            //判断http请求
+            $status = 1;
+            if(!is_null($msg) || $httpCode != 200) {
+                $status = 2; //状态为2表示失败
+                $result = $msg;
+            }
 
-            $status = '成功';
-            if(!is_null($msg) || $httpCode != 200 || $data['code'] != 1) {
-                $status = '失败';
+            //判断是否按照要求输出数据
+            if(is_null(json_decode($result, true))) {
+                $status = 2; //状态为2表示失败
+            } else {
+                $returnData   = json_decode($result, true);
+                $returnStatus = isset($returnData['status'])  ? $returnData['status'] : 1;
+                if($returnStatus == 0) {
+                    $status = 2;
+                }
+            }
 
-                //todo 报警处理
+            //运行出错，发送报警
+            if($status == 2) {
                 Alarm::noticeProgrammer($params);
             }
 
             //todo 任务运行日志
             $logData = array(
-                'task_id'       => $taskId,
-                'task_title'    => $title,
-                'task_url'      => $url,
-                'task_code'     => $httpCode,
-                'task_status'   => $status,
-                'task_result'   => $result,
-                'task_runTime'  => time()
+                'task_id'  => $taskId,
+                'title'    => $title,
+                'code'     => $httpCode,
+                'status'   => $status,
+                'result'   => $result,
+                'addtime'  => date('Y-m-d H:i:s')
             );
             Logger::addTimerLog($logData);
         }
@@ -261,13 +273,13 @@ class TimerServer {
             exit("Start parameter does not exist\n");
         }
 
-        $client = new swoole_client(SWOOLE_SOCK_UDP);
+        $client = new swoole_client(SWOOLE_SOCK_TCP);
         $ret = $client->connect('127.0.0.1', 9504, 0.5);
         if(!$ret) {
             throw new Exception($client->errCode);
         }
 
-        $client->send($cmd);
+        $client->send("{$cmd}\r\n\r\n");
         $ret =  $client->recv();
         echo $ret . PHP_EOL;
     }

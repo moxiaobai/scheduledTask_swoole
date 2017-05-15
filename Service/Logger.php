@@ -9,7 +9,7 @@
 
 namespace Service;
 
-use Library\Db\MongoDb;
+use Library\Db\Mysql;
 
 class Logger {
 
@@ -19,10 +19,8 @@ class Logger {
      * @param $data
      */
     public static function addTimerLog($data) {
-        $instance = MongoDb::instance('cron');
-
-        $instance->setCollection('taskRunLog');
-        $instance->insert($data);
+        $db  = Mysql::instance('cron');
+        $db->insert('t_log')->rows($data)->execute();
     }
 
 }

@@ -13,14 +13,16 @@ class Database  {
         'product' => array(
             'host'     => 'localhost',
             'user'     => 'root',
-            'password' => 'mg^@@!@$',
-            'database' => 'system'
+            'password' => '123456',
+            'database' => 'cron',
+            'port'     => 3306
         ),
         'develop' => array(
             'host'     => '192.168.1.202',
             'user'     => 'root',
             'password' => 'rxg^@@!@$1987',
-            'database' => 'cron'
+            'database' => 'cron',
+            'port'     => 3306
         )
     );
 

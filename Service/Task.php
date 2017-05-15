@@ -20,13 +20,11 @@ class Task {
         $db  = Mysql::instance('cron');
         $now = date('Y-m-d H:i:s');
 
-        $sql = $db->select('*')->from('t_schedule')
+        return $db->select('*')->from('t_schedule')
                         ->where("s_status = 1")
                         ->where("'{$now}' <= s_endTime")
-                        ->order('s_id', 'ASC');
-        $row = $db->fetchAll($sql);
-
-        return $row;
+                        ->order('s_id', 'ASC')
+                        ->fetchAll();
     }
 
     /**
@@ -39,12 +37,8 @@ class Task {
         $db        = Mysql::instance('cron');
         $runTime   = date('Y-m-d H:i:s');
 
-        $sql = "UPDATE t_schedule
-                SET s_runTime = '$runTime', s_timerId = $timerId, s_running_state = 2
-                WHERE s_id = $taskId";
-        $result = $db->query($sql);
-
-        return $result;
+        $data = array('s_runTime'=>$runTime, 's_timerId'=>$timerId, 's_running_state'=>2);
+        return $db->update('t_schedule')->rows($data)->where('s_id', $taskId)->execute();
     }
 
     /**
@@ -54,11 +48,8 @@ class Task {
         $db        = Mysql::instance('cron');
         $stopTime   = date('Y-m-d H:i:s');
 
-        $sql = "UPDATE t_schedule
-                SET s_stopTime = '$stopTime', s_timerId = -1, s_running_state =1";
-        $result = $db->query($sql);
-
-        return $result;
+        $data = array('s_stopTime'=>$stopTime, 's_timerId'=>-1, 's_running_state'=>1);
+        return $db->update('t_schedule')->rows($data)->where("1=1")->execute();
     }
 
     /**
@@ -72,11 +63,7 @@ class Task {
         $db        = Mysql::instance('cron');
         $stopTime  = date('Y-m-d H:i:s');
 
-        $sql = "UPDATE t_schedule
-                SET s_stopTime='$stopTime', s_timerId = -1, s_running_state = 1
-                WHERE s_id = $taskId";
-        $result = $db->query($sql);
-
-        return $result;
+        $data = array('s_stopTime'=>$stopTime, 's_timerId'=>-1, 's_running_state'=>1);
+        return $db->update('t_schedule')->rows($data)->where('s_id', $taskId)->execute();
     }
 }
