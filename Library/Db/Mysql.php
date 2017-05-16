@@ -5,7 +5,6 @@ namespace Library\Db;
 
 class Mysql {
 
-	private static $_configs   = array();
 	private static $_instances = array();
 
 	protected $_connection = NULL;
@@ -30,13 +29,26 @@ class Mysql {
      * @return Mysql
      * @throws \Exception
      */
-	public static function instance($name, $env='product') {
-		if ( empty(self::$_configs) ) {
-	        self::$_configs = \Config\Database::getConfig($name, $env);
+	public static function instance($name) {
+        if(!defined('APP_ENV')) {
+            throw new \Exception("UnDefined Env: APP_ENV");
+        }
+
+        if(!defined('APP_PROJECT')) {
+            throw new \Exception("UnDefined Project: APP_PROJECT");
+        }
+
+        $env     = APP_ENV;
+        $project = APP_PROJECT;
+
+        $config = \Yaconf::get("{$project}_database.{$env}.mysql");
+
+        if(!isset($config[$name])) {
+            throw new \Exception('Missing Database Config');
         }
 
         if ( ! isset(self::$_instances[$name]) ) {
-        	$instance = new Mysql ( self::$_configs['host'], self::$_configs['user'], self::$_configs['password'], self::$_configs['database'],self::$_configs['port'] );
+        	$instance = new Mysql ( $config[$name]['host'], $config[$name]['user'], $config[$name]['password'], $config[$name]['database'],$config[$name]['port'] );
         	self::$_instances[$name] = $instance;
 
         	return self::$_instances[$name];

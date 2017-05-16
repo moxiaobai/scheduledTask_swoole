@@ -9,6 +9,12 @@
 
 require_once __DIR__ . '/Library/Autoloader.php';
 
+//项目名称
+define("APP_PROJECT", 'cron');
+
+//系统环境
+define('APP_ENV', ini_get('yaf.environ'));
+
 use Service\Task;
 use Service\Logger;
 use Service\Alarm;
@@ -19,32 +25,34 @@ class TimerServer {
     private $_server;
 
     public function __construct($cmd) {
-        if($cmd == 'start') {
+        if($cmd === 'start') {
             $this->_server = new swoole_server("127.0.0.1", 9503);
             $this->_server->set(array(
-                'worker_num'     => 1,   //必须设置为1
-                'max_request'    => 10000,
-                'open_eof_check' => true,        //打开EOF检测
-                'package_eof'    => "\r\n\r\n", //设置EOF
-                'open_eof_split' => true,        //启用EOF自动分包
-                'dispatch_mode'  => 2,
-                'debug_mode'     => 1 ,
-                'daemonize'      => true,
-                'log_file'       => __DIR__ . '/Log/swoole.log'
+                'worker_num'      => 1,   //必须设置为1
+                'max_request'     => 10000,
+                'open_eof_check'  => true,        //打开EOF检测
+                'package_eof'     => "\r\n\r\n", //设置EOF
+                'open_eof_split'  => true,        //启用EOF自动分包
+                //'dispatch_mode'  => 2,
+                'task_worker_num' => 2,
+                'debug_mode'      => 1 ,
+                'daemonize'       => true,
+                'pid_file'        => __DIR__ . '/Log/swoole.pid',
+                'log_file'        => __DIR__ . '/Log/swoole.log'
             ));
 
             //增加监听的端口
-            $this->_server->addlistener("127.0.0.1", 9504, SWOOLE_SOCK_TCP);
+            $this->_server->addlistener("127.0.0.1", 9504, SWOOLE_SOCK_UDP);
 
             //设置事件回调
-            $this->_server->on('Start', array($this, 'onStart'));
+            $this->_server->on('Start',       array($this, 'onStart'));
             $this->_server->on('WorkerStart', array($this, 'onWorkerStart'));
-            $this->_server->on('Receive', array($this, 'onReceive'));
-            $this->_server->on('Shutdown', array($this, 'onShutdown'));
+            $this->_server->on('Receive',     array($this, 'onReceive'));
+            $this->_server->on('Shutdown',    array($this, 'onShutdown'));
+            $this->_server->on('Task',        array($this, 'onTask'));
+            $this->_server->on('Finish',      array($this, 'onFinish'));
 
             $this->_server->start();
-
-            echo '服务器启动: ' . date('Y-m-d H:i:s') . PHP_EOL;
         } else {
             $this->manage($cmd);
         }
@@ -52,14 +60,14 @@ class TimerServer {
 
     //主进程的主线程回调此函数
     public function onStart($server) {
-        //echo '服务器启动: ' . date('Y-m-d H:i:s') . PHP_EOL;
+        echo '服务器启动: ' . date('m-d H:i:s') . ' 主进程Pid:' . $server->master_pid . " 管理进程Pid:" . $server->manager_pid . PHP_EOL;
 
         //设置主进程名称
         swoole_set_process_name('scheduledTask');
     }
 
     //worker启动，初始化任务
-    public function onWorkerStart( $server , $worker_id) {
+    public function onWorkerStart(swoole_server $server , $worker_id) {
         // 在Worker进程开启时绑定定时器
         echo '定时任务启动: ' . date('Y-m-d H:i:s') . PHP_EOL;
 
@@ -100,26 +108,38 @@ class TimerServer {
         }
 
         //局域网管理
-        $udpClient = $server->connection_info($fd, $from_id);
-        if($udpClient['server_port'] == '9504') {
-            //echo $data . PHP_EOL;
-
+        $connectionInfo = $server->connection_info($fd, $from_id);
+        if($connectionInfo['server_port'] == '9504') {
             $data = trim($data);
             switch($data) {
                 case 'stop':
-                    echo 1 . PHP_EOL;
-                    echo '服务器关闭: ' . date('Y-m-d H:i:s') . PHP_EOL;
+                    echo '关闭服务器: ' . date('Y-m-d H:i:s') . PHP_EOL;
 
                     $server->shutdown();
                     $server->send($fd, '服务器关闭成功');
 
                     break;
                 case 'reload':
-                    echo 2 . PHP_EOL;
-                    echo 'Worker进程重启: ' . date('Y-m-d H:i:s') . PHP_EOL;
+                    echo '重启所有worker进程: ' . date('Y-m-d H:i:s') . PHP_EOL;
 
                     $server->reload();
                     $server->send($fd, '服务器Worker重启成功');
+
+                    break;
+                case 'status':
+                    $info = '';
+                    $info  .= "\033[1A\n\033[K-----------------------\033[47;30m Swoole \033[0m-----------------------------\n\033[0m";
+                    $info  .= 'Swoole version:' . SWOOLE_VERSION . "          PHP version:" . PHP_VERSION . "\n";
+                    $info  .=  "------------------------\033[47;30m WORKERS \033[0m-------------------------------\n";
+                    $info  .=  "\033[47;30muser\033[0m" . str_pad('',
+                        14 - strlen('user')) . "\033[47;30mworker\033[0m" . str_pad('',
+                        14 - strlen('worker')) . "\033[47;30mlisten\033[0m" . str_pad('',
+                        14 - strlen('listen')). "\033[47;30mprocesses\033[0m \033[47;30m" . "status\033[0m\n";
+
+                    echo "----------------------------------------------------------------\n";
+
+                    $stats = $server->stats();
+                    $server->send($fd, $info);
 
                     break;
                 default:
@@ -127,6 +147,10 @@ class TimerServer {
 
                     break;
             }
+
+            //关闭Connection
+            //$server->close($fd);
+
         } else {
             $data = json_decode($data, true);
 
@@ -192,7 +216,8 @@ class TimerServer {
         }
     }
 
-    public function onShutdown($server) {
+    //监听服务器关闭事件
+    public function onShutdown(swoole_server $server) {
         echo '服务器关闭: ' . date('Y-m-d H:i:s') . PHP_EOL;
 
         //清除定时器记录
@@ -200,6 +225,14 @@ class TimerServer {
 
         //通知运维人员
         Alarm::noticeOperational();
+    }
+
+    public function onTask(swoole_server $serv, $task_id, $from_id, $data) {
+
+    }
+
+    public function onFinish(swoole_server $serv, $task_id, $data) {
+
     }
 
     /**
@@ -269,11 +302,11 @@ class TimerServer {
      * @throws Exception
      */
     private function manage($cmd) {
-        if(!in_array($cmd, array('start', 'stop', 'reload'))) {
+        if(!in_array($cmd, array('start', 'stop', 'reload', 'status'))) {
             exit("Start parameter does not exist\n");
         }
 
-        $client = new swoole_client(SWOOLE_SOCK_TCP);
+        $client = new swoole_client(SWOOLE_SOCK_UDP, SWOOLE_SOCK_SYNC);
         $ret = $client->connect('127.0.0.1', 9504, 0.5);
         if(!$ret) {
             throw new Exception($client->errCode);
@@ -286,12 +319,11 @@ class TimerServer {
 }
 
 
-
 global $argv;
 $startFile = $argv[0];
 
 if(!isset($argv[1])) {
-    exit("Usage: php {$startFile} {start|stop|reload}\n");
+    exit("Usage: php {$startFile} {start|stop|reload|status}\n");
 }
 
 new TimerServer($argv[1]);

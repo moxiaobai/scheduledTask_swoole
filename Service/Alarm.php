@@ -1,5 +1,9 @@
 <?php
 
+/**
+ * 微信推送（http://sc.ftqq.com/3.version）
+ */
+
 namespace Service;
 
 /**
@@ -10,9 +14,9 @@ namespace Service;
  * @since : 2015/5/11 15:15
  */
 
-use Library\Db\Mysql;
-
 class Alarm {
+
+    const PUSH_SERVER = 'http://sc.ftqq.com/SCU60T29db0e2a2c17d9e3d4ec3e77d5a41a2055eee817beab5.send';
 
     /**
      * 报警：通知程序负责人处理
@@ -22,14 +26,12 @@ class Alarm {
      * @return mixed
      */
     public static function noticeProgrammer($params) {
-        $url     = 'http://sc.ftqq.com/SCU60T29db0e2a2c17d9e3d4ec3e77d5a41a2055eee817beab5.send';
-
         $content = '';
         foreach($params as $val) {
             $content .= "* {$val} <br />";
         }
         $data  = array('text' => '定时程序执行失败', 'desp' => $content);
-        return self::httpRequest($url, $data);
+        return self::httpRequest(Alarm::PUSH_SERVER, $data);
     }
 
 
@@ -40,30 +42,19 @@ class Alarm {
      * @return mixed
      */
     public static function noticeOperational() {
-        $url = 'http://sc.ftqq.com/SCU60T29db0e2a2c17d9e3d4ec3e77d5a41a2055eee817beab5.send';
         $data = array('text' =>'定时任务系统关闭');
 
-        return self::httpRequest($url, $data);
+        return self::httpRequest(Alarm::PUSH_SERVER, $data);
 
     }
 
     /**
-     * 获取程序员用户信息
+     * Http请求
      *
-     * @param $uid
+     * @param $url
+     * @param $data
      * @return mixed
-     * @throws Exception
      */
-    private function getProgrammerInfo($uid) {
-        $db  = Mysql::instance('cron');
-
-        $sql = $db->select('u_phone')->from('t_user')->where('u_id', $uid);
-
-        $row = $db->fetchValue($sql);
-
-        return $row;
-    }
-
     private function httpRequest($url, $data) {
         $curl = curl_init();
         curl_setopt($curl, CURLOPT_URL, $url);

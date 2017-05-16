@@ -20,25 +20,28 @@ class Redis {
      * @var Redis
      * @return \Redis
      */
-    public static function instance($name, $env='product')
+    public static function instance()
     {
-        $config = \Config\Redis::getConfig($name, $env);
-
+        $project = APP_PROJECT;
+        $config = \Yaconf::get("{$project}." . APP_ENV);
         if (!isset($config)) {
             throw new \Exception("Redis Config not set");
         }
 
-        if (!isset(self::$_instance[$name])) {
+        if (!isset(self::$_instance[$project])) {
             if (extension_loaded('Redis')) {
-                self::$_instance[$name] = new \Redis();
+                self::$_instance[$project] = new \Redis();
             } else {
                 throw new \Exception("extension Redis is not installed");
             }
 
-            self::$_instance[$name]->connect($config['host'], $config['port']);
+            self::$_instance[$project]->connect($config['host'], $config['port']);
+            if(isset($config['pwd']) && $config['pwd']){
+                self::$_instance[$project]->auth($config['pwd']);
+            }
         }
 
-        return self::$_instance[$name];
+        return self::$_instance[$project];
     }
 
 }
