@@ -1,7 +1,7 @@
 <?php
 /**
  * Created by PhpStorm.
- * @author: moxiaobai(renxiaogang@onemt.com.cn)
+ * @author: moxiaobai
  * @since: 2017/5/15  20:05
  */
 
